@@ -1,127 +1,152 @@
 {
-	"name": "spectral",
-	"displayName": "Spectral",
-	"description": "JSON/YAML linter with OpenAPI and custom ruleset support.",
-	"version": "0.2.5",
-	"preview": true,
-	"private": true,
-	"author": "Stoplight <support@stoplight.io>",
-	"publisher": "stoplight",
-	"bugs": {
-		"url": "https://github.com/stoplightio/vscode-spectral/issues"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/stoplightio/vscode-spectral"
-	},
-	"homepage": "https://github.com/stoplightio/vscode-spectral",
-	"icon": "icon.png",
-	"keywords": [
-		"linter",
-		"validator",
-		"OpenAPI",
-		"Swagger",
-		"API",
-		"style guide",
-		"API description",
-		"API specification",
-		"OAS",
-		"OAS2",
-		"OAS3",
-		"AsyncAPI"
-	],
-	"license": "Apache-2.0",
-	"engines": {
-		"vscode": "^1.62.0"
-	},
-	"categories": [
-		"Linters"
-	],
-	"activationEvents": [
-		"*"
-	],
-	"main": "./dist/extension.js",
-  "contributes": {
-    "configuration": {
-      "properties": {
-        "spectral.enable": {
-          "default": true,
-          "description": "Controls whether or not Spectral is enabled.",
-          "scope": "resource",
-          "type": "boolean"
-        },
-        "spectral.rulesetFile": {
-          "description": "Location of the ruleset file to use when validating. If omitted, the default is a .spectral.yml/.spectral.json in the same folder as the document being validated. Paths are relative to the workspace.",
-          "scope": "resource",
-          "type": "string"
-        },
-        "spectral.run": {
-          "default": "onType",
-          "description": "Run the linter on save (onSave) or as you type (onType).",
-          "enum": [
-            "onSave",
-            "onType"
-          ],
-          "scope": "resource",
-          "type": "string"
-        },
-        "spectral.validateFiles": {
-          "description": "An array of file globs (e.g., `**/*.yaml`) in minimatch glob format which should be validated by Spectral. If language identifiers are also specified, the file must match both in order to be validated.",
-          "items": {
-            "type": "string"
-          },
-          "scope": "resource",
-          "type": "array"
-        },
-        "spectral.validateLanguages": {
-          "default": [
-            "json",
-            "yaml"
-          ],
-          "description": "An array of language IDs which should be validated by Spectral. If file globs are also specified, the file must match both in order to be validated.",
-          "items": {
-            "type": "string"
-          },
-          "scope": "resource",
-          "type": "array"
-        }
-      },
-      "title": "Spectral",
-      "type": "object"
-    },
-    "commands": [
-      {
-        "title": "Show Output Channel",
-        "category": "Spectral",
-        "command": "spectral.showOutputChannel"
-      }
-    ]
-  },
-	"scripts": {
-		"vscode:prepublish": "npm run package",
-		"compile": "webpack",
-		"watch": "webpack --watch",
-		"package": "webpack --mode production --devtool hidden-source-map",
-		"test-compile": "tsc -p ./",
-		"test-watch": "tsc -watch -p ./",
-		"pretest": "npm run test-compile && npm run lint",
-		"lint": "eslint src --ext ts",
-		"test": "node ./out/test/runTest.js"
-	},
-	"devDependencies": {
-		"@types/vscode": "^1.62.0",
-		"@types/glob": "^7.1.3",
-		"@types/mocha": "^8.2.2",
-		"@types/node": "14.x",
-		"eslint": "^7.27.0",
-		"@typescript-eslint/eslint-plugin": "^4.26.0",
-		"@typescript-eslint/parser": "^4.26.0",
-		"glob": "^7.1.7",
-		"mocha": "^8.4.0",
-		"typescript": "^4.3.2",
-		"vscode-test": "^1.5.2",
-		"ts-loader": "^9.2.2",
-		"webpack": "^5.38.1",
-		"webpack-cli": "^4.7.0"
-	}
+		"name": "spectral",
+		"displayName": "Spectral",
+		"description": "JSON/YAML linter with OpenAPI and custom ruleset support.",
+		"version": "0.3.0-spectral6",
+		"preview": true,
+		"private": true,
+		"author": "Stoplight <support@stoplight.io>",
+		"publisher": "stoplight",
+		"bugs": {
+				"url": "https://github.com/stoplightio/vscode-spectral/issues"
+		},
+		"repository": {
+				"type": "git",
+				"url": "https://github.com/stoplightio/vscode-spectral"
+		},
+		"homepage": "https://github.com/stoplightio/vscode-spectral",
+		"icon": "icon.png",
+		"keywords": [
+				"linter",
+				"validator",
+				"OpenAPI",
+				"Swagger",
+				"API",
+				"style guide",
+				"API description",
+				"API specification",
+				"OAS",
+				"OAS2",
+				"OAS3",
+				"AsyncAPI"
+		],
+		"license": "Apache-2.0",
+		"engines": {
+				"vscode": "^1.62.0"
+		},
+		"categories": [
+				"Linters"
+		],
+		"activationEvents": [
+				"*"
+		],
+		"main": "./dist/extension.js",
+		"contributes": {
+				"configuration": {
+						"properties": {
+								"spectral.enable": {
+										"default": true,
+										"description": "Controls whether or not Spectral is enabled.",
+										"scope": "resource",
+										"type": "boolean"
+								},
+								"spectral.rulesetFile": {
+										"description": "Location of the ruleset file to use when validating. If omitted, the default is a .spectral.yml/.spectral.json in the same folder as the document being validated. Paths are relative to the workspace.",
+										"scope": "resource",
+										"type": "string"
+								},
+								"spectral.run": {
+										"default": "onType",
+										"description": "Run the linter on save (onSave) or as you type (onType).",
+										"enum": [
+												"onSave",
+												"onType"
+										],
+										"scope": "resource",
+										"type": "string"
+								},
+								"spectral.validateFiles": {
+										"description": "An array of file globs (e.g., `**/*.yaml`) in minimatch glob format which should be validated by Spectral. If language identifiers are also specified, the file must match both in order to be validated.",
+										"items": {
+												"type": "string"
+										},
+										"scope": "resource",
+										"type": "array"
+								},
+								"spectral.validateLanguages": {
+										"default": [
+												"json",
+												"yaml"
+										],
+										"description": "An array of language IDs which should be validated by Spectral. If file globs are also specified, the file must match both in order to be validated.",
+										"items": {
+												"type": "string"
+										},
+										"scope": "resource",
+										"type": "array"
+								}
+						},
+						"title": "Spectral",
+						"type": "object"
+				},
+				"commands": [
+						{
+								"title": "Show Output Channel",
+								"category": "Spectral",
+								"command": "spectral.showOutputChannel"
+						}
+				]
+		},
+		"scripts": {
+				"vscode:prepublish": "npm run package",
+				"compile": "webpack",
+				"watch": "webpack --watch",
+				"package": "webpack --mode production --devtool hidden-source-map",
+				"test-compile": "tsc -p ./",
+				"test-watch": "tsc -watch -p ./",
+				"pretest": "npm run test-compile && npm run lint",
+				"lint": "eslint src --ext ts",
+				"test": "node ./out/test/runTest.js"
+		},
+		"devDependencies": {
+				"@types/vscode": "^1.62.0",
+				"@types/glob": "^7.1.3",
+				"@types/mocha": "^8.2.2",
+				"@types/node": "14.x",
+				"eslint": "^7.27.0",
+				"@typescript-eslint/eslint-plugin": "^4.26.0",
+				"@typescript-eslint/parser": "^4.26.0",
+				"glob": "^7.1.7",
+				"mocha": "^8.4.0",
+				"typescript": "^4.3.2",
+				"vscode-test": "^1.5.2",
+				"ts-loader": "^9.2.2",
+				"webpack": "^5.38.1",
+				"webpack-cli": "^4.7.0"
+		},
+		"dependencies": {
+				"@stoplight/better-ajv-errors": "0.2.0",
+				"@stoplight/json": "3.17.0",
+				"@stoplight/lifecycle": "2.3.2",
+				"@stoplight/path": "1.3.2",
+				"@stoplight/spectral-core": "^1.6.1",
+				"@stoplight/spectral-functions": "^1.4.0",
+				"@stoplight/spectral-parsers": "^1.0.0",
+				"@stoplight/spectral-ref-resolver": "^1.0.0",
+				"@stoplight/spectral-runtime": "^1.0.0",
+				"@stoplight/types": "12.3.0",
+				"ajv": "~8.6.0",
+				"ajv-errors": "~3.0.0",
+				"ajv-formats": "~2.1.0",
+				"blueimp-md5": "2.18.0",
+				"js-yaml": "^4.1.0",
+				"json-schema": "0.3.0",
+				"jsonpath-plus": "6.0.1",
+				"lodash": "~4.17.21",
+				"lodash.topath": "^4.5.2",
+				"minimatch": "3.0.4",
+				"nimma": "0.1.6",
+				"simple-eval": "1.0.0",
+				"tslib": "^2.3.0"
+		}
 }
