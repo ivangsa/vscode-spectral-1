@@ -1,85 +1,176 @@
 'use strict';
 import * as vscode from 'vscode';
-import { Spectral } from '@stoplight/spectral-core';
+import { Document, RuleDefinition, RulesetDefinition, Spectral } from '@stoplight/spectral-core';
 import { truthy } from '@stoplight/spectral-functions'; // this has to be installed as well
 import { DiagnosticSeverity } from '@stoplight/types';
 import { readFile } from '@stoplight/spectral-runtime';
 import { parseYaml, parseJson } from '@stoplight/spectral-parsers';
+import * as minimatch from 'minimatch';
 
 const spectral = new Spectral();
 
-export async function activate(context: vscode.ExtensionContext) {
-    const collection = vscode.languages.createDiagnosticCollection('spectral');
-    if (vscode.window.activeTextEditor) {
-        updateDiagnostics(vscode.window.activeTextEditor.document, collection);
-    }
-    context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor(editor => {
-            if (editor) {
-                updateDiagnostics(editor.document, collection);
-            }
-        })
-    );
+function getConfiguration() {
+    const config = vscode.workspace.getConfiguration('spectral');
+    const settings = {
+        // The defaults should match the package.json.
+        enabled: config.get('enable', true),
+        rulesetFile: config.get('rulesetFile', undefined),
+        run: config.get('run', 'onType'),
+        lintOnType: config.get('run', 'onType') === 'onType',
+        validateFiles: config.get('validateFiles', []),
+        validateLanguages: config.get('validateLanguages', ['json', 'yaml']),
+        workspaceFolder: undefined,
+        documentFilters: [] as vscode.DocumentFilter[],
+    };
 
-    context.subscriptions.push(
-        vscode.languages.registerCodeActionsProvider('yaml', new MyCodeActionProvider(), {
-            providedCodeActionKinds: MyCodeActionProvider.providedCodeActionKinds,
+    settings.validateFiles.forEach(pattern => {
+        settings.documentFilters.push({ pattern, language: '*' });
+    });
+    settings.validateLanguages.forEach(language => {
+        settings.documentFilters.push({ language });
+    });
+
+    return settings;
+}
+
+let config = getConfiguration();
+
+export async function activate(context: vscode.ExtensionContext) {
+    config.enabled && (await loadConfiguredRuleset());
+
+    const diagnosticCollection = vscode.languages.createDiagnosticCollection('spectral');
+
+    console.log('vscode.workspace.textDocuments', vscode.workspace.textDocuments);
+    vscode.workspace.textDocuments?.forEach(document => {
+        console.log('textDocuments?.forEach', document.fileName);
+        updateSpectralDiagnostics(document, diagnosticCollection);
+    });
+
+    const onOpenDocListener = vscode.workspace.onDidOpenTextDocument(async document => {
+        console.log('onDidOpenTextDocument', document.fileName, document.uri.fsPath);
+        updateSpectralDiagnostics(document, diagnosticCollection);
+    });
+
+    const onCloseDocListener = vscode.workspace.onDidCloseTextDocument(editor => {
+        console.log('onDidCloseTextDocument', editor.fileName);
+        diagnosticCollection.delete(editor.uri);
+    });
+
+    const onTypeListener = vscode.workspace.onDidChangeTextDocument(event => {
+        console.log('onDidChangeTextDocument', event.document.fileName);
+        config.lintOnType && updateSpectralDiagnostics(event.document, diagnosticCollection);
+    });
+
+    const onSaveListener = vscode.workspace.onDidSaveTextDocument(document => {
+        console.log('onDidSaveTextDocument', document.fileName);
+        updateSpectralDiagnostics(document, diagnosticCollection);
+    });
+
+    let codeActionsProvider = vscode.languages.registerCodeActionsProvider(config.documentFilters, new MyCodeActionProvider(), {
+        providedCodeActionKinds: MyCodeActionProvider.providedCodeActionKinds,
+    });
+
+    vscode.workspace.onDidChangeConfiguration(async e => {
+        config = getConfiguration();
+        if (e.affectsConfiguration('spectral.enable')) {
+            if (config.enabled === false) {
+                diagnosticCollection.clear();
+            } else {
+                await loadConfiguredRuleset();
+            }
+        }
+        if (e.affectsConfiguration('spectral.rulesetFile')) {
+            await loadConfiguredRuleset();
+        }
+        if (e.affectsConfiguration('spectral.run')) {
+            config.lintOnType = vscode.workspace.getConfiguration('spectral').get<string>('run') === 'onType' || false;
+        }
+        if (e.affectsConfiguration('spectral.validateFiles') || e.affectsConfiguration('spectral.validateLanguages')) {
+            codeActionsProvider.dispose();
+            codeActionsProvider = vscode.languages.registerCodeActionsProvider(config.documentFilters, new MyCodeActionProvider(), {
+                providedCodeActionKinds: MyCodeActionProvider.providedCodeActionKinds,
+            });
+            context.subscriptions.push(codeActionsProvider);
+        }
+    });
+
+    context.subscriptions.push(diagnosticCollection);
+    context.subscriptions.push(onOpenDocListener);
+    context.subscriptions.push(onCloseDocListener);
+    context.subscriptions.push(onTypeListener);
+    context.subscriptions.push(onSaveListener);
+    context.subscriptions.push(codeActionsProvider);
+}
+
+function isLintEnabled(document: vscode.TextDocument): boolean {
+    return (
+        config.enabled &&
+        config.documentFilters.some(filter => {
+            if (filter.language === document.languageId) {
+                return true;
+            }
+            if (filter.pattern) {
+                return minimatch(document.fileName, filter.pattern.toString(), { matchBase: true });
+            }
+            return false;
         })
     );
 }
 
-async function updateDiagnostics(document: vscode.TextDocument, collection: vscode.DiagnosticCollection): Promise<void> {
-    const rule = await loadRules('d:/dev/apitools/linter-config/openapi/rules/itx-spectral.yaml');
-    try {
-        spectral.setRuleset({ ...rule });
-    } catch (e) {
-        // Error: Error at #/: must NOT have additional properties
-        // Error at #/rules/contact-email: must NOT have additional properties
-        //     at assertValidRuleset (d:\dev\public-repos\vscode-extension-samples\diagnostic-related-information-sample\node_modules\@stoplight\spectral-core\src\ruleset\validation.ts:117:11)
-        //     at new Ruleset (d:\dev\public-repos\vscode-extension-samples\diagnostic-related-information-sample\node_modules\@stoplight\spectral-core\src\ruleset\ruleset.ts:59:25)
-        //     at Spectral.setRuleset (d:\dev\public-repos\vscode-extension-samples\diagnostic-related-information-sample\node_modules\@stoplight\spectral-core\src\spectral.ts:101:59)
-        //     at updateDiagnostics (d:\dev\public-repos\vscode-extension-samples\diagnostic-related-information-sample\src\extension.ts:35:18)
-        console.error(e);
-        spectral.setRuleset({
-            // a ruleset has to be provided
-            rules: {
-                'no-empty-description': {
-                    given: '$..description',
-                    message: 'Description must not be empty',
-                    then: {
-                        function: truthy,
-                    },
-                    // codeAction: { title: 'Add description', command: 'addDescription' },
-                },
+const defaultRuleset = {
+    // extends: 'spectral:oas',
+    rules: {
+        'no-empty-description': {
+            given: '$..description',
+            message: 'Description must not be empty',
+            then: {
+                function: truthy,
             },
-        });
+        },
+    },
+};
+async function loadConfiguredRuleset(): Promise<any> {
+    const rulesetFile = vscode.workspace.getConfiguration('spectral').get<string>('rulesetFile');
+    const ruleSet = (rulesetFile && (await readLocalOrRemoteRules(rulesetFile))) || defaultRuleset;
+    try {
+        spectral.setRuleset(ruleSet);
+    } catch (e: any) {
+        console.error(`Failed configuring ruleset: ${e.message}`, ruleSet);
+        vscode.window.showErrorMessage(`Failed configuring ruleset from ${rulesetFile}`);
+        spectral.setRuleset(defaultRuleset);
     }
+}
 
-    if (document.languageId === 'json' || document.languageId === 'yml' || document.languageId === 'yaml') {
-        collection.clear();
-
-        spectral
-            .run(document.getText())
-            .then(results => {
-                const diagnostics = results.map(result => {
-                    return {
-                        code: result.code,
-                        message: result.message,
-                        range: new vscode.Range(
-                            new vscode.Position(result.range.start.line, result.range.start.character),
-                            new vscode.Position(result.range.end.line, result.range.end.character)
-                        ),
-                        severity: convertSeverity(result.severity),
-                        source: 'spectral',
-                    };
-                });
-                collection.set(document.uri, diagnostics);
-            })
-            .catch(err => {
-                console.log('Error running spectral on document', err);
-            });
+async function updateSpectralDiagnostics(document: vscode.TextDocument, collection: vscode.DiagnosticCollection): Promise<void> {
+    if (!isLintEnabled(document)) {
         return;
     }
+    console.log('updateSpectralDiagnostics', document.fileName);
+
+    collection.delete(document.uri);
+    spectral
+        .run(document.getText())
+        .then(results => {
+            const diagnostics = results.map(result => {
+                return {
+                    code: result.code,
+                    message: result.message,
+                    range: new vscode.Range(
+                        new vscode.Position(result.range.start.line, result.range.start.character),
+                        new vscode.Position(result.range.end.line, result.range.end.character)
+                    ),
+                    severity: convertSeverity(result.severity),
+                    source: 'spectral',
+                };
+            });
+
+            collection.set(document.uri, diagnostics);
+        })
+        .catch(err => {
+            console.log('Error running spectral on document', err);
+            vscode.window.showErrorMessage(`Error running spectral on document: ${err.message}`);
+        });
+    return;
 }
 
 /**
@@ -91,10 +182,16 @@ function convertSeverity(severity: DiagnosticSeverity): vscode.DiagnosticSeverit
     return (<any>vscode.DiagnosticSeverity)[DiagnosticSeverity[severity]];
 }
 
-async function loadRules(uri: string): Promise<any> {
-    const contents = await readFile(uri, { timeout: 1000, encoding: 'utf8' });
-    const parse = uri.endsWith('.yaml') || uri.endsWith('yml') ? parseYaml : parseJson;
-    return parse(contents);
+async function readLocalOrRemoteRules(uri: string): Promise<any> {
+    try {
+        const contents = await readFile(uri, { timeout: 1000, encoding: 'utf8' });
+        const parse = uri.endsWith('.yaml') || uri.endsWith('yml') ? parseYaml : parseJson;
+        return parse(contents);
+    } catch (e) {
+        console.error(`Failed to read ruleset from ${uri}`, e);
+        vscode.window.showErrorMessage(`Failed to read ruleset file: ${uri}`);
+        return null;
+    }
 }
 
 export class MyCodeActionProvider implements vscode.CodeActionProvider {
@@ -106,7 +203,7 @@ export class MyCodeActionProvider implements vscode.CodeActionProvider {
         context: vscode.CodeActionContext,
         token: vscode.CancellationToken
     ): vscode.CodeAction[] | undefined {
-        console.log('provideCodeActions', range, context.diagnostics?.map(d => d.code).join(', '));
+        // console.log('provideCodeActions', range, context.diagnostics?.map(d => d.code).join(', '));
         const codeActions = context.diagnostics
             .map(diagnostic => {
                 if (diagnostic.code === 'no-empty-description') {
