@@ -9,34 +9,40 @@ import * as minimatch from 'minimatch';
 
 const spectral = new Spectral();
 
-function getConfiguration() {
-    const config = vscode.workspace.getConfiguration('spectral');
-    const settings = {
-        // The defaults should match the package.json.
-        enabled: config.get('enable', true),
-        rulesetFile: config.get('rulesetFile', undefined),
-        run: config.get('run', 'onType'),
-        lintOnType: config.get('run', 'onType') === 'onType',
-        validateFiles: config.get('validateFiles', []),
-        validateLanguages: config.get('validateLanguages', ['json', 'yaml']),
-        workspaceFolder: undefined,
-        documentFilters: [] as vscode.DocumentFilter[],
-    };
+export class Configuration {
+    enable: boolean = true;
+    rulesetFile: string | undefined;
+    run: string = 'onType';
+    validateFiles: string[] = [];
+    validateLanguages = ['json', 'yaml'];
+    documentFilters: vscode.DocumentFilter[] = []; // calculated
 
-    settings.validateFiles.forEach(pattern => {
-        settings.documentFilters.push({ pattern, language: '*' });
-    });
-    settings.validateLanguages.forEach(language => {
-        settings.documentFilters.push({ language });
-    });
+    constructor(config?: Partial<Configuration> | vscode.WorkspaceConfiguration) {
+        if (config) {
+            Object.assign(this, config);
+            // TODO improve this
+            this.validateFiles.forEach(pattern => {
+                this.documentFilters.push({ pattern, language: '*' });
+            });
+            this.validateLanguages.forEach(language => {
+                this.documentFilters.push({ language });
+            });
+        }
+    }
 
-    return settings;
+    get lintOnType() {
+        return this.run === 'onType';
+    }
 }
 
-let config = getConfiguration();
+export function getConfiguration() {
+    return new Configuration(vscode.workspace.getConfiguration('spectral'));
+}
+
+let config = getConfiguration(); // global
 
 export async function activate(context: vscode.ExtensionContext) {
-    config.enabled && (await loadConfiguredRuleset());
+    config.enable && (await loadConfiguredRuleset());
 
     const diagnosticCollection = vscode.languages.createDiagnosticCollection('spectral');
 
@@ -47,22 +53,22 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     const onOpenDocListener = vscode.workspace.onDidOpenTextDocument(async document => {
-        console.log('onDidOpenTextDocument', document.fileName, document.uri.fsPath);
+        // console.log('onDidOpenTextDocument', document.fileName, document.uri.fsPath);
         updateSpectralDiagnostics(document, diagnosticCollection);
     });
 
     const onCloseDocListener = vscode.workspace.onDidCloseTextDocument(editor => {
-        console.log('onDidCloseTextDocument', editor.fileName);
+        // console.log('onDidCloseTextDocument', editor.fileName);
         diagnosticCollection.delete(editor.uri);
     });
 
     const onTypeListener = vscode.workspace.onDidChangeTextDocument(event => {
-        console.log('onDidChangeTextDocument', event.document.fileName);
+        // console.log('onDidChangeTextDocument', event.document.fileName);
         config.lintOnType && updateSpectralDiagnostics(event.document, diagnosticCollection);
     });
 
     const onSaveListener = vscode.workspace.onDidSaveTextDocument(document => {
-        console.log('onDidSaveTextDocument', document.fileName);
+        // console.log('onDidSaveTextDocument', document.fileName);
         updateSpectralDiagnostics(document, diagnosticCollection);
     });
 
@@ -73,7 +79,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeConfiguration(async e => {
         config = getConfiguration();
         if (e.affectsConfiguration('spectral.enable')) {
-            if (config.enabled === false) {
+            if (config.enable === false) {
                 diagnosticCollection.clear();
             } else {
                 await loadConfiguredRuleset();
@@ -81,9 +87,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }
         if (e.affectsConfiguration('spectral.rulesetFile')) {
             await loadConfiguredRuleset();
-        }
-        if (e.affectsConfiguration('spectral.run')) {
-            config.lintOnType = vscode.workspace.getConfiguration('spectral').get<string>('run') === 'onType' || false;
         }
         if (e.affectsConfiguration('spectral.validateFiles') || e.affectsConfiguration('spectral.validateLanguages')) {
             codeActionsProvider.dispose();
@@ -103,8 +106,9 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function isLintEnabled(document: vscode.TextDocument): boolean {
+    // console.log('isLintEnabled', config);
     return (
-        config.enabled &&
+        config.enable &&
         config.documentFilters.some(filter => {
             if (filter.language === document.languageId) {
                 return true;
@@ -145,7 +149,7 @@ async function updateSpectralDiagnostics(document: vscode.TextDocument, collecti
     if (!isLintEnabled(document)) {
         return;
     }
-    console.log('updateSpectralDiagnostics', document.fileName);
+    // console.log('updateSpectralDiagnostics', document.fileName);
 
     collection.delete(document.uri);
     spectral
@@ -164,7 +168,8 @@ async function updateSpectralDiagnostics(document: vscode.TextDocument, collecti
                 };
             });
 
-            collection.set(document.uri, diagnostics);
+          console.log('diagnostics', diagnostics);
+          collection.set(document.uri, diagnostics);
         })
         .catch(err => {
             console.log('Error running spectral on document', err);
